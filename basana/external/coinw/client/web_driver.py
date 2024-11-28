@@ -1,12 +1,10 @@
+import os
 from time import sleep
 from selenium import webdriver
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.firefox.webdriver import WebDriver as FirefoxWebDriver
-from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import (
-    NoSuchElementException,
     TimeoutException,
     WebDriverException,
 )
@@ -15,6 +13,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from typing import Optional
 import sys
 import traceback
+import json
 
 from basana.external.coinw.client.web_entry import Button
 
@@ -23,7 +22,8 @@ class BrowserAutomator:
     def __init__(
         self,
         browser: str = "chrome",
-        profile_path: Optional[str] = None,
+        base_url: str = None,
+        cookies_path: Optional[str] = None,
         driver_path: Optional[str] = None,
         headless: bool = False,
         implicitly_wait_time: int = 10,
@@ -32,42 +32,45 @@ class BrowserAutomator:
         Initializes the BrowserAutomator with given browser settings.
 
         :param browser: The browser to use ('chrome' or 'firefox').
-        :param profile_path: Path to the browser user profile.
+        :param base_url: The entry URL of this session.
         :param driver_path: Path to the WebDriver executable. If None, assumes it's in PATH.
         :param headless: Whether to run the browser in headless mode.
         :param implicitly_wait_time: Implicit wait time for element searches.
         """
         self.browser = browser.lower()
+        self.base_url = base_url
         self.driver: Optional[WebDriver] = None
         self.wait: Optional[WebDriverWait] = None
 
         try:
             if self.browser == "chrome":
                 options = Options()
-                if profile_path:
-                    options.add_argument(f"user-data-dir={profile_path}")
                 if headless:
                     options.add_argument("--headless")
                 if driver_path:
                     options.binary_location = driver_path
                 self.driver = webdriver.Chrome(options=options)
-            elif self.browser == "firefox":
-                options = FirefoxOptions()
-                if profile_path:
-                    options.profile = profile_path
-                if headless:
-                    options.headless = True
-                if driver_path:
-                    options.binary_location = driver_path
-                self.driver = webdriver.Firefox(options=options)
             else:
                 raise ValueError("Unsupported browser specified. Use 'chrome' or 'firefox'.")
 
             self.driver.implicitly_wait(implicitly_wait_time)
             self.wait = WebDriverWait(self.driver, implicitly_wait_time)
-
         except WebDriverException as e:
             print("Error initializing WebDriver:", e)
+            sys.exit(1)
+
+        try:
+            if cookies_path:
+                self.driver.get(self.base_url)
+                with open(cookies_path, 'r') as cookies_file:
+                    cookies = json.load(cookies_file)
+                    for cookie in cookies:
+                        # Adjust the cookie if necessary (e.g., remove 'sameSite' attribute if it's not accepted)
+                        cookie.pop('sameSite', None)
+                        self.driver.add_cookie(cookie)
+                self.driver.refresh()
+        except Exception as e:
+            print(f'Error loading cookes: {e}')
             sys.exit(1)
 
     def navigate_to(self, url: str) -> None:
@@ -140,6 +143,8 @@ if __name__ == "__main__":
     url_ethusdt = 'https://www.coinw.com/futures/usdt/ethusdt'
     automator = BrowserAutomator(
         browser="chrome",
+        base_url='https://www.coinw.com',
+        cookies_path=os.environ.get('COINW_COOKIES'),
         driver_path=None,  # Assuming chromedriver is in your PATH
         headless=False
     )
