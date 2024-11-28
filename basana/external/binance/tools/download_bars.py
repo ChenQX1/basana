@@ -13,7 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import os
 from typing import List, Optional
 import argparse
 import datetime
@@ -98,6 +98,8 @@ async def main(params: Optional[List[str]] = None, config_overrides: dict = {}):
         "-e", "--end", help="The ending date YYYY-MM-DD format. Included in the range.", required=True
     )
     parser.add_argument("-o", "--output", help="The output file.", required=False, default=None)
+    parser.add_argument("--key", help="Binance API key", required=True)
+    parser.add_argument("--secret", help="Binance API secret", required=True)
     args = parser.parse_args(args=params)
 
     step = period_to_step[args.period]
@@ -115,7 +117,7 @@ async def main(params: Optional[List[str]] = None, config_overrides: dict = {}):
     now_ts = helpers.datetime_to_timestamp(dt.utc_now())
     writer = CSVWriter(args.output)
     async with aiohttp.ClientSession() as session:
-        cli = client.APIClient(session=session, tb=tb, config_overrides=config_overrides)
+        cli = client.APIClient(args.key, args.secret, session=session, tb=tb, config_overrides=config_overrides)
         eof = False
         currency_pair = to_binance_currency_pair(args.currency_pair)
         while not eof:
@@ -136,4 +138,6 @@ async def main(params: Optional[List[str]] = None, config_overrides: dict = {}):
 
 
 if __name__ == "__main__":  # pragma: no cover
+    api_key = os.getenv('BINANCE_API_KEY')
+    api_secret = os.getenv('BINANCE_API_SECRET')
     asyncio.run(main())
